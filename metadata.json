@@ -1,0 +1,8 @@
+{
+  "name": "Papan QR",
+  "description": "Sistema de gerenciamento de estoque e ativação de QR Codes dinâmicos para placas físicas pela Papan Media.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
