@@ -17,9 +17,36 @@ import { PublicQRRedirect } from './views/PublicQRRedirect';
 
 const AUTH_STORAGE_KEY = 'papan_auth_user_v1';
 
+function extractPublicQrCode(): string | null {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname;
+  const hash = window.location.hash;
+  const searchParams = new URLSearchParams(window.location.search);
+
+  // 1. Check path /q/CODE or /q/CODE/ (case-insensitive)
+  const pathMatch = path.match(/^\/q\/([a-zA-Z0-9_-]+)/i);
+  if (pathMatch && pathMatch[1]) {
+    return pathMatch[1];
+  }
+
+  // 2. Check hash #/q/CODE
+  const hashMatch = hash.match(/#\/q\/([a-zA-Z0-9_-]+)/i);
+  if (hashMatch && hashMatch[1]) {
+    return hashMatch[1];
+  }
+
+  // 3. Check param ?q=CODE
+  const qParam = searchParams.get('q');
+  if (qParam) {
+    return qParam;
+  }
+
+  return null;
+}
+
 export default function App() {
-  // Public scan redirect detection: e.g. /q/PAPAN-0047 or #/q/PAPAN-0047 or ?q=PAPAN-0047
-  const [publicQrCode, setPublicQrCode] = useState<string | null>(null);
+  // Public scan redirect detection: initialized synchronously from window.location
+  const [publicQrCode, setPublicQrCode] = useState<string | null>(() => extractPublicQrCode());
 
   // Authenticated user state
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -53,32 +80,7 @@ export default function App() {
   // Check URL on load and when popstate occurs for /q/:code
   useEffect(() => {
     const checkPublicRoute = () => {
-      const path = window.location.pathname;
-      const hash = window.location.hash;
-      const searchParams = new URLSearchParams(window.location.search);
-
-      // 1. Check path /q/CODE
-      const pathMatch = path.match(/^\/q\/([a-zA-Z0-9_-]+)/);
-      if (pathMatch && pathMatch[1]) {
-        setPublicQrCode(pathMatch[1]);
-        return;
-      }
-
-      // 2. Check hash #/q/CODE
-      const hashMatch = hash.match(/#\/q\/([a-zA-Z0-9_-]+)/);
-      if (hashMatch && hashMatch[1]) {
-        setPublicQrCode(hashMatch[1]);
-        return;
-      }
-
-      // 3. Check param ?q=CODE
-      const qParam = searchParams.get('q');
-      if (qParam) {
-        setPublicQrCode(qParam);
-        return;
-      }
-
-      setPublicQrCode(null);
+      setPublicQrCode(extractPublicQrCode());
     };
 
     checkPublicRoute();
