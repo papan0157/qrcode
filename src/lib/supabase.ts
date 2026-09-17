@@ -19,6 +19,14 @@ export function getSupabaseClient(url?: string, key?: string): SupabaseClient | 
           persistSession: true,
           autoRefreshToken: true,
         },
+        global: {
+          fetch: (input, init) => {
+            return fetch(input, {
+              ...init,
+              keepalive: true,
+            });
+          },
+        },
       });
       currentConfigKey = configKey;
     } catch (err) {
