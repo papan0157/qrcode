@@ -30,7 +30,6 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import QRCode from 'qrcode';
 import { QRCodeItem, QRScanItem, DestinationType, QRStatus } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { DestinationBadge } from '../components/DestinationBadge';
@@ -40,6 +39,8 @@ import {
   generatePlaquePngDataUrl,
   getPhysicalPlaqueNumber,
   getPlaqueExportFilename,
+  renderStandardTransparentQR,
+  copyQrCodeImageToClipboard,
 } from '../lib/qr-generator';
 import { getScansForQRCode, updateQRCode, recordScan } from '../lib/storage';
 import { subscribeToRealtimeScans, RealtimeScanEvent } from '../lib/realtime';
@@ -62,6 +63,7 @@ export const QRDetailView: React.FC<QRDetailViewProps> = ({
   const [scans, setScans] = useState<QRScanItem[]>([]);
   const [loadingScans, setLoadingScans] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [copiedImage, setCopiedImage] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
   // Edit form state
@@ -79,16 +81,13 @@ export const QRDetailView: React.FC<QRDetailViewProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dynamicUrl = buildDynamicUrl(qrCode.code, baseDomain, useCurrentOrigin);
 
-  // Render high-res QR code on mount
+  // Render high-res standard transparent QR code on mount
   useEffect(() => {
     if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, dynamicUrl, {
-        width: 280,
+      renderStandardTransparentQR(canvasRef.current, dynamicUrl, {
+        width: 800,
+        darkColor: '#000000',
         margin: 1,
-        color: {
-          dark: '#0f172a',
-          light: '#ffffff',
-        },
       }).catch(console.error);
     }
   }, [dynamicUrl, qrCode.code]);
@@ -196,6 +195,19 @@ export const QRDetailView: React.FC<QRDetailViewProps> = ({
   // Download PNG for printing
   const handleDownload = async () => {
     await downloadSingleQrPng(qrCode.code, dynamicUrl);
+  };
+
+  // Copy transparent QR code directly to clipboard for pasting into plaque design (Ctrl+V)
+  const handleCopyImage = async () => {
+    if (!canvasRef.current) return;
+    const success = await copyQrCodeImageToClipboard(canvasRef.current);
+    if (success) {
+      setCopiedImage(true);
+      setTimeout(() => setCopiedImage(false), 2500);
+    } else {
+      // Fallback: download file
+      await downloadSingleQrPng(qrCode.code, dynamicUrl);
+    }
   };
 
   // Print single plaque
@@ -342,33 +354,61 @@ export const QRDetailView: React.FC<QRDetailViewProps> = ({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-6 sm:p-8">
           <div className="flex flex-col lg:flex-row items-center lg:items-start gap-8">
-            {/* Left: Plaque Mockup with Clean Centered QR and Discreet Footer Number */}
-            <div className="w-full sm:w-72 shrink-0 flex flex-col items-center">
+            {/* Left: QR Code Pronto para Copiar e Colar (Sem Fundo e Sem Número) */}
+            <div className="w-full sm:w-80 shrink-0 flex flex-col items-center">
               <div className="w-full bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-md flex flex-col items-center text-center relative group">
                 <div className="flex items-center justify-between w-full mb-3 px-1">
                   <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                    Arte Física da Placa
+                    QR Code Padrão
                   </span>
-                  <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-mono">
-                    Placa: {getPhysicalPlaqueNumber(qrCode.code)}
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-mono">
+                    Sem Fundo
                   </span>
                 </div>
 
-                {/* High-res canvas QR - CLEAN & CENTERED, NO TEXT NEAR IT */}
-                <div className="p-3 bg-white rounded-xl shadow-xs border border-slate-100 flex items-center justify-center w-full aspect-square">
-                  <canvas ref={canvasRef} className="w-48 h-48 object-contain mx-auto" />
+                {/* High-res canvas QR - with subtle checkerboard background indicating 100% transparency */}
+                <div
+                  className="p-3.5 rounded-xl shadow-inner border border-slate-200 flex items-center justify-center w-full aspect-square relative overflow-hidden"
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%)',
+                    backgroundSize: '16px 16px',
+                    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                    backgroundColor: '#ffffff',
+                  }}
+                  title="Fundo 100% transparente e sem número: clique em Copiar e cole diretamente no Corel, Illustrator, Canva, etc."
+                >
+                  <canvas ref={canvasRef} className="w-52 h-52 object-contain mx-auto relative z-10" />
                 </div>
 
-                {/* Discreet plaque number at bottom footer */}
-                <div className="mt-5 w-full pt-3 border-t border-slate-100 flex items-center justify-center">
-                  <span className="font-mono text-xs font-semibold text-slate-400 tracking-widest">
-                    {getPhysicalPlaqueNumber(qrCode.code)}
-                  </span>
+                {/* Quick Action Buttons inside Card */}
+                <div className="w-full mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
+                  <button
+                    id="btn-copy-qr-card"
+                    type="button"
+                    onClick={handleCopyImage}
+                    className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Copia o QR Code sem fundo e sem número para colar com Ctrl+V na placa"
+                  >
+                    {copiedImage ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5 text-white" />}
+                    <span>{copiedImage ? 'Copiado!' : 'Copiar (Ctrl+V)'}</span>
+                  </button>
+
+                  <button
+                    id="btn-download-qr-card"
+                    type="button"
+                    onClick={handleDownload}
+                    className="w-full py-2.5 px-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Baixar imagem PNG transparente sem número da placa"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Baixar PNG</span>
+                  </button>
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-400 text-center mt-2.5">
-                QR Code limpo centralizado. Número físico discreto no rodapé.
+              <p className="text-[11px] text-slate-500 text-center mt-2.5 leading-relaxed">
+                Apenas o QR Code padrão (quadrado, sem fundo e sem número), pronto para colar na sua arte.
               </p>
             </div>
 
@@ -393,6 +433,17 @@ export const QRDetailView: React.FC<QRDetailViewProps> = ({
                 {/* Actions Toolbar */}
                 <div className="flex flex-wrap items-center gap-2">
                   <button
+                    id="btn-copy-transparent-qr"
+                    type="button"
+                    onClick={handleCopyImage}
+                    title="Copia a imagem do QR Code sem fundo para a área de transferência"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    {copiedImage ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5 text-white" />}
+                    <span>{copiedImage ? 'Imagem Copiada (Ctrl+V)!' : 'Copiar Imagem (Sem Fundo)'}</span>
+                  </button>
+
+                  <button
                     id="btn-edit-qr"
                     type="button"
                     onClick={() => {
@@ -413,7 +464,7 @@ export const QRDetailView: React.FC<QRDetailViewProps> = ({
                     type="button"
                     onClick={handleTest}
                     title="Abre a URL dinâmica pública /q/:code para testar o redirecionamento"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>Testar Link</span>
@@ -439,9 +490,10 @@ export const QRDetailView: React.FC<QRDetailViewProps> = ({
                     type="button"
                     onClick={handleDownload}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Baixar PNG transparente em alta definição"
                   >
                     <Download className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Baixar PNG</span>
+                    <span>Baixar PNG Sem Fundo</span>
                   </button>
 
                   <button

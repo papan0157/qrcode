@@ -11,10 +11,18 @@ import {
   Link,
   Building,
   RotateCcw,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { QRCodeItem, DestinationType } from '../types';
 import { activateQRCode } from '../lib/storage';
-import { buildDynamicUrl, downloadSingleQrPng, getPhysicalPlaqueNumber } from '../lib/qr-generator';
+import {
+  buildDynamicUrl,
+  downloadSingleQrPng,
+  getPhysicalPlaqueNumber,
+  renderStandardTransparentQR,
+  copyQrCodeImageToClipboard,
+} from '../lib/qr-generator';
 
 interface ActivateQuickModalProps {
   isOpen: boolean;
@@ -42,6 +50,7 @@ export const ActivateQuickModal: React.FC<ActivateQuickModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activatedItem, setActivatedItem] = useState<QRCodeItem | null>(null);
+  const [copiedImage, setCopiedImage] = useState(false);
 
   // Pick first available automatically when opening
   useEffect(() => {
@@ -121,6 +130,23 @@ export const ActivateQuickModal: React.FC<ActivateQuickModalProps> = ({
   const handleDownloadPng = async () => {
     if (activatedItem) {
       await downloadSingleQrPng(activatedItem.code, dynamicTestUrl);
+    }
+  };
+
+  const handleCopyImage = async () => {
+    if (!activatedItem || !dynamicTestUrl) return;
+    const canvas = document.createElement('canvas');
+    await renderStandardTransparentQR(canvas, dynamicTestUrl, {
+      width: 800,
+      darkColor: '#000000',
+      margin: 1,
+    });
+    const success = await copyQrCodeImageToClipboard(canvas);
+    if (success) {
+      setCopiedImage(true);
+      setTimeout(() => setCopiedImage(false), 2500);
+    } else {
+      await handleDownloadPng();
     }
   };
 
@@ -206,21 +232,35 @@ export const ActivateQuickModal: React.FC<ActivateQuickModalProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
+                    id="btn-copy-activated-qr"
+                    type="button"
+                    onClick={handleCopyImage}
+                    className="py-2.5 px-3 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    title="Copia o QR Code sem fundo para colar na placa (Ctrl+V)"
+                  >
+                    {copiedImage ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedImage ? 'Imagem Copiada!' : 'Copiar Imagem'}</span>
+                  </button>
+
+                  <button
+                    id="btn-download-activated-png"
                     type="button"
                     onClick={handleDownloadPng}
                     className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    title="Baixar imagem PNG transparente sem fundo"
                   >
-                    <Download className="w-3.5 h-3.5" />
+                    <Download className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Baixar PNG</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-xs transition-colors cursor-pointer"
-                  >
-                    <span>Concluir</span>
-                  </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-xs transition-colors cursor-pointer"
+                >
+                  <span>Concluir</span>
+                </button>
               </div>
             </div>
           ) : (

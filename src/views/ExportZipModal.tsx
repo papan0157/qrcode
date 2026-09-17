@@ -91,7 +91,7 @@ export const ExportZipModal: React.FC<ExportZipModalProps> = ({
           </div>
 
           <p className="text-xs text-slate-500 mt-2">
-            Gere um arquivo ZIP com as imagens PNG para produção das placas físicas. O QR Code é gerado limpo e centralizado, com o <strong>Número da Placa</strong> discreto no rodapé.
+            Gere um arquivo ZIP com as imagens PNG de alta resolução para produção das placas. Todas as imagens são geradas <strong>100% sem fundo (transparentes)</strong>, no formato quadrado padrão e <strong>sem número na imagem</strong>, prontas para você copiar e colar na placa física.
           </p>
 
           {availableCodes.length === 0 ? (
@@ -100,6 +100,13 @@ export const ExportZipModal: React.FC<ExportZipModalProps> = ({
             </div>
           ) : (
             <div className="mt-4 space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
+                <span className="font-semibold">Formato do Lote:</span>
+                <span className="font-mono text-[11px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
+                  Apenas QR Code (Sem Fundo e Sem Número)
+                </span>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Quantidade a Exportar ({availableCodes.length} disponíveis no estoque)

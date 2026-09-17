@@ -53,13 +53,132 @@ export interface PlaqueRenderOptions {
   width?: number;
   numberPosition?: PlaqueNumberPosition;
   showPhysicalNumber?: boolean;
+  transparent?: boolean;
+  pureQrOnly?: boolean;
+  darkColor?: string;
 }
 
 /**
- * Renders the clean physical plaque PNG for production:
- * - QR Code perfectly centered in the designated area.
- * - ZERO text, phrases, or slogans near the QR Code (NO "PAPAN-0001", NO "Avalie nossa empresa").
- * - ONLY the physical plaque number (e.g. "001") discreetly placed at the bottom footer.
+ * Helper to draw a rounded rectangle on a canvas 2D context.
+ */
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+): void {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y + w, x, y, radius);
+  ctx.closePath();
+}
+
+/**
+ * Renders standard crisp QR Code with 100% transparent background:
+ * - Standard square modules and standard finder patterns (standard format, scans instantly on any device).
+ * - 100% transparent background (no white box behind it, alpha = 0).
+ * - Purely the QR Code (no plaque number, no text, no frame).
+ */
+export async function renderStandardTransparentQR(
+  canvas: HTMLCanvasElement,
+  url: string,
+  options: {
+    width?: number;
+    darkColor?: string;
+    margin?: number;
+    errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+  } = {}
+): Promise<void> {
+  const {
+    width = 1200,
+    darkColor = '#000000',
+    margin = 1,
+    errorCorrectionLevel = 'M',
+  } = options;
+
+  const qr = QRCode.create(url, { errorCorrectionLevel });
+  const matrixSize = qr.modules.size;
+  const totalGrid = matrixSize + margin * 2;
+  const cellSize = width / totalGrid;
+
+  canvas.width = width;
+  canvas.height = width;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not get canvas context');
+
+  // Completely transparent background (Alpha = 0)
+  ctx.clearRect(0, 0, width, width);
+  ctx.fillStyle = darkColor;
+
+  // Standard crisp, square modules - standard universal QR Code format
+  for (let r = 0; r < matrixSize; r++) {
+    for (let c = 0; c < matrixSize; c++) {
+      if (qr.modules.get(r, c)) {
+        const x = Math.round((c + margin) * cellSize);
+        const y = Math.round((r + margin) * cellSize);
+        const nextX = Math.round((c + margin + 1) * cellSize);
+        const nextY = Math.round((r + margin + 1) * cellSize);
+        ctx.fillRect(x, y, nextX - x, nextY - y);
+      }
+    }
+  }
+}
+
+// Alias for backwards compatibility
+export const renderBeautifulTransparentQR = renderStandardTransparentQR;
+
+/**
+ * Generates a pure transparent PNG DataURL of the QR Code (no background, no text).
+ */
+export async function generateTransparentQrDataUrl(
+  url: string,
+  options: { width?: number; darkColor?: string } = {}
+): Promise<string> {
+  const canvas = document.createElement('canvas');
+  await renderStandardTransparentQR(canvas, url, options);
+  return canvas.toDataURL('image/png');
+}
+
+/**
+ * Copies the transparent QR Code PNG directly to the user's clipboard
+ * so they can directly press Ctrl+V / Paste into CorelDraw, Illustrator, Canva, Photoshop, etc.
+ */
+export async function copyQrCodeImageToClipboard(
+  canvas: HTMLCanvasElement
+): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard || typeof ClipboardItem === 'undefined') {
+    return false;
+  }
+  return new Promise((resolve) => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        resolve(false);
+        return;
+      }
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob }),
+        ]);
+        resolve(true);
+      } catch (err) {
+        console.warn('Clipboard image write failed:', err);
+        resolve(false);
+      }
+    }, 'image/png');
+  });
+}
+
+/**
+ * Renders the clean QR Code PNG for plaque production:
+ * - 100% TRANSPARENT BACKGROUND (no white box behind it).
+ * - Standard, sharp QR Code modules (100% reliable scanning).
+ * - PURE QR CODE ONLY: zero text, zero plaque number, ready to copy & paste into plaque artwork.
  */
 export async function generatePlaquePngDataUrl(
   code: string,
@@ -67,78 +186,26 @@ export async function generatePlaquePngDataUrl(
   options: PlaqueRenderOptions | number = {}
 ): Promise<string> {
   const opts: PlaqueRenderOptions = typeof options === 'number' ? { width: options } : options;
-  const width = opts.width || 1000;
-  const numberPosition = opts.numberPosition || 'bottom-center';
-  const showPhysicalNumber = opts.showPhysicalNumber !== false;
+  const width = opts.width || 1200;
+  const darkColor = opts.darkColor || '#000000';
 
-  // Plaque proportions for physical acrylic / metal plates
-  const height = Math.round(width * 1.18);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not get canvas context');
-
-  // Clean solid background
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, width, height);
-
-  // Generate clean QR code
-  const qrSize = Math.round(width * 0.76);
-  const qrCanvas = document.createElement('canvas');
-  await QRCode.toCanvas(qrCanvas, url, {
-    width: qrSize,
-    margin: 1,
-    errorCorrectionLevel: 'M',
-    color: {
-      dark: '#000000',
-      light: '#FFFFFF',
-    },
-  });
-
-  // Center QR code on the canvas with balanced vertical breathing room
-  const qrX = Math.round((width - qrSize) / 2);
-  const qrY = Math.round((height - qrSize) / 2) - Math.round(width * 0.025);
-  ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
-
-  // Discreet physical plaque number at the bottom footer (e.g. "001")
-  // Configurable position (defaults to bottom-center)
-  if (showPhysicalNumber) {
-    const physicalNumber = getPhysicalPlaqueNumber(code);
-    const fontSize = Math.round(width * 0.028); // Subtle, small, discreet size
-    ctx.fillStyle = '#64748B'; // Professional slate gray
-    ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.textBaseline = 'middle';
-
-    const textY = height - Math.round(width * 0.045);
-
-    if (numberPosition === 'bottom-left') {
-      ctx.textAlign = 'left';
-      ctx.fillText(physicalNumber, Math.round(width * 0.08), textY);
-    } else if (numberPosition === 'bottom-right') {
-      ctx.textAlign = 'right';
-      ctx.fillText(physicalNumber, width - Math.round(width * 0.08), textY);
-    } else {
-      // bottom-center
-      ctx.textAlign = 'center';
-      ctx.fillText(physicalNumber, width / 2, textY);
-    }
-  }
-
-  return canvas.toDataURL('image/png');
+  // Always return pure transparent QR code without any plaque number or extra borders
+  return await generateTransparentQrDataUrl(url, { width, darkColor });
 }
 
 /**
  * Downloads a single plaque PNG file to the user's browser.
- * Filename example: PLACA-001_PAPAN-0001.png
+ * Filename example: PLACA-0001_PAPAN-0001.png
+ * Default: 100% transparent background (no white box).
  */
 export async function downloadSingleQrPng(
   code: string,
   url: string,
-  filename?: string
+  filename?: string,
+  options?: PlaqueRenderOptions
 ): Promise<void> {
   const defaultFilename = `${getPlaqueExportFilename(code)}.png`;
-  const dataUrl = await generatePlaquePngDataUrl(code, url, { width: 1200 });
+  const dataUrl = await generatePlaquePngDataUrl(code, url, { width: 1500, ...options });
   const link = document.createElement('a');
   link.download = filename || defaultFilename;
   link.href = dataUrl;
@@ -149,16 +216,18 @@ export async function downloadSingleQrPng(
 
 /**
  * Generates a ZIP file containing PNGs of the selected QR Codes.
+ * All PNGs generated with transparent background and beautiful modern design!
  * Filenames follow the production standard:
- * PLACA-001_PAPAN-0001.png
- * PLACA-002_PAPAN-0002.png
+ * PLACA-0001_PAPAN-0001.png
+ * PLACA-0002_PAPAN-0002.png
  * ...
  */
 export async function generateQrZip(
   codes: QRCodeItem[],
   baseDomain: string,
   useCurrentOrigin: boolean,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  options?: PlaqueRenderOptions
 ): Promise<Blob> {
   const zip = new JSZip();
   const total = codes.length;
@@ -166,7 +235,7 @@ export async function generateQrZip(
   for (let i = 0; i < total; i++) {
     const item = codes[i];
     const url = buildDynamicUrl(item.code, baseDomain, useCurrentOrigin);
-    const dataUrl = await generatePlaquePngDataUrl(item.code, url, { width: 1000 });
+    const dataUrl = await generatePlaquePngDataUrl(item.code, url, { width: 1200, ...options });
     // Convert base64 dataUrl to binary
     const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
     const filename = `${getPlaqueExportFilename(item.code)}.png`;
@@ -179,3 +248,4 @@ export async function generateQrZip(
 
   return await zip.generateAsync({ type: 'blob' });
 }
+

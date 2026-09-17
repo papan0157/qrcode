@@ -141,11 +141,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Brand & Domain Card */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-blue-600" />
-            <span>Identidade e Domínio dos QR Codes</span>
-          </h2>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-600" />
+                <span>Domínio Próprio & Identidade dos QR Codes</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Defina o domínio personalizado que será gravado nas placas físicas de acrílico/metal.
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md border border-blue-100">
+              Placas Físicas
+            </span>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -160,7 +170,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="block w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
               <p className="text-[11px] text-slate-400 mt-1">
-                Permite futuramente alterar a marca da solução.
+                Nome de identificação exibido no painel e cabeçalhos.
               </p>
             </div>
 
@@ -181,20 +191,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Domínio dos QR Codes Dinâmicos
-            </label>
-            <input
-              type="text"
-              value={qrBaseDomain}
-              onChange={(e) => setQrBaseDomain(e.target.value)}
-              placeholder="https://qr.papanmedia.com.br"
-              className="block w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              Endereço gravado nas placas físicas de produção. Ex: https://qr.papanmedia.com.br/q/PAPAN-0001
-            </p>
+          {/* Campo de Domínio Existente */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-900">
+                Adicionar Domínio Existente (URL Base dos QR Codes)
+              </label>
+              <button
+                type="button"
+                onClick={() => setQrBaseDomain(window.location.origin)}
+                className="text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+              >
+                Preencher com endereço atual desta janela
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                type="url"
+                value={qrBaseDomain}
+                onChange={(e) => setQrBaseDomain(e.target.value)}
+                placeholder="https://qr.papanmedia.com.br"
+                className="block w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border-2 border-slate-300 focus:border-blue-500 rounded-xl text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+              />
+            </div>
+
+            {/* Live URL Preview */}
+            <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <span className="text-slate-600 font-medium">
+                Os QR Codes físicos serão gerados apontando para:
+              </span>
+              <span className="font-mono font-bold text-blue-800 bg-white px-2 py-1 rounded border border-blue-200 select-all">
+                {qrBaseDomain.replace(/\/$/, '')}/q/PAPAN-0001
+              </span>
+            </div>
+          </div>
+
+          {/* Guia de Como Apontar o Domínio */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+            <span className="font-bold text-slate-800 block">
+              Como vincular o seu domínio existente à aplicação na internet:
+            </span>
+            <div className="space-y-1.5 text-slate-600 leading-relaxed">
+              <p>
+                <strong>1. No seu registrador de domínio (Registro.br, Cloudflare, GoDaddy, Hostinger, etc.):</strong>
+                <br />
+                Crie um registro do tipo <strong>CNAME</strong> apontando para a URL do seu servidor publicado (ou subdomínio como <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-800">qr.seusite.com.br</code>).
+              </p>
+              <p>
+                <strong>2. No serviço de hospedagem:</strong>
+                <br />
+                Se você fizer o deploy pelo Google Cloud Run, Vercel ou Netlify, basta ir na aba <em>"Custom Domains"</em> e adicionar o seu domínio.
+              </p>
+              <p>
+                <strong>3. Aqui nesta tela de Configurações:</strong>
+                <br />
+                Basta digitar o seu domínio no campo acima e clicar em <strong>"Salvar Configurações"</strong>. Todos os novos downloads de PNG e ZIP já virão automaticamente com os QR Codes apontando para o seu endereço oficial.
+              </p>
+            </div>
           </div>
 
           {/* Dev/Preview helper toggle */}
